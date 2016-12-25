@@ -1,8 +1,8 @@
-# slack_emoji_mover
-Move your Slack team emoji to other Slack team.
+# slack_emoji_uploader_go
+Upload emoji file to Slack team easily - just drug and drop picture file.
 
 ##What is this script for?
-Move emoji from Slack team to other Slack team.
+Upload emoji file to Slack by drug and drop.
 
 ##What do I need to use this script?
 Nothing - ready to go!
