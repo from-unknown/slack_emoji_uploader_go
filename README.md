@@ -15,5 +15,6 @@ Nothing - ready to go!
      upload
    For Windows:
      upload.bat
+   (emoji name will be a file name without extension.)
 4. wait until emoji data are uploaded
 5. done!
