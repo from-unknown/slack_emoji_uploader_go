@@ -5,7 +5,7 @@ Upload emoji file to Slack team easily - just drug and drop picture file.
 Upload emoji file to Slack by drug and drop.
 
 ##What do I need to use this script?
-Nothing - ready to go!
+Nothing - ready to go!  
 Please download zip from release page.  
 [release page](https://github.com/from-unknown/slack_emoji_uploader_go/releases)
 
