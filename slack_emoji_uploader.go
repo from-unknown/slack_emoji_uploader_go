@@ -156,7 +156,7 @@ func main() {
 
 	if includeInList(defaultEmojiList, emojiName) ||
 		includeInList(existList, emojiName) {
-		log.Fatal("Emoji name" + emojiName + " already Exists.")
+		log.Fatal("Emoji name " + emojiName + " already Exists.")
 	}
 
 	log.Println("Uploading emoji...")
@@ -273,8 +273,13 @@ func resizeImage(filePath string, maxSize float64) error {
 	defer tmpFile.Close()
 
 	if ratio == 1 {
-		_, err := io.Copy(imageFile, tmpFile)
+		_, err = imageFile.Seek(io.SeekStart, 0)
 		if err != nil {
+			return err
+		}
+		_, err := io.Copy(tmpFile, imageFile)
+		if err != nil {
+			log.Fatal(err)
 			return err
 		}
 	} else {
