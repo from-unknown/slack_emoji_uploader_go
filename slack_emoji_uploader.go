@@ -9,9 +9,9 @@ import (
 	"github.com/headzoo/surf"
 	"github.com/nfnt/resize"
 	"image"
-	//"image/color/palette"
-	//"image/draw"
-	//"image/gif"
+	"image/color"
+	"image/draw"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -45,8 +45,8 @@ func main() {
 
 	filePath := os.Args[1]
 	tmpExt := strings.ToLower(filepath.Ext(filePath))
-	if tmpExt != ".jpg" && tmpExt != ".jpeg" && tmpExt != ".png" {
-		log.Fatal("Only jpeg or png file are allowed.")
+	if tmpExt != ".jpg" && tmpExt != ".jpeg" && tmpExt != ".png" && tmpExt != ".gif" {
+		log.Fatal("Only jpeg or png or gif file are allowed.")
 	}
 
 	emojiBase := filepath.Base(filePath)
@@ -142,7 +142,7 @@ func main() {
 	// Find registered emoji from webpage
 	existList := list.New()
 	bow.Find("td.align_middle").Each(func(_ int, s *goquery.Selection) {
-		// emoji name are formatted :xxx: from, so use regexp to check
+		// emoji name are formatted :xxx: form, so use regexp to check
 		match, err := regexp.MatchString(":*:", s.Text())
 		if err != nil {
 			log.Fatal("Error while checking web page.")
@@ -212,7 +212,7 @@ func resizeImage(filePath string, maxSize float64) error {
 	defer imageFile.Close()
 
 	var decImage image.Image
-	//var gifImage *gif.GIF
+	var gifImage *gif.GIF
 	var imageConfig image.Config
 	if ext == ".jpg" || ext == ".jpeg" {
 		decImage, err = jpeg.Decode(imageFile)
@@ -240,15 +240,15 @@ func resizeImage(filePath string, maxSize float64) error {
 		if err != nil {
 			return err
 		}
-		//	} else if ext == ".gif" {
-		//		gifImage, err = gif.DecodeAll(imageFile)
-		//		if err != nil {
-		//			return err
-		//		}
-		//		imageConfig = gifImage.Config
-		//		if err != nil {
-		//			return err
-		//		}
+	} else if ext == ".gif" {
+		gifImage, err = gif.DecodeAll(imageFile)
+		if err != nil {
+			return err
+		}
+		imageConfig = gifImage.Config
+		if err != nil {
+			return err
+		}
 	} else {
 		return nil
 	}
@@ -291,19 +291,50 @@ func resizeImage(filePath string, maxSize float64) error {
 			resized := resize.Resize(uint(math.Floor(width*ratio)), uint(math.Floor(height*ratio)),
 				decImage, resize.Lanczos3)
 			png.Encode(tmpFile, resized)
+		} else if ext == ".gif" {
+			for index, frame := range gifImage.Image {
+				rect := frame.Bounds()
+				tmpImage := frame.SubImage(rect)
+				resizedImage := resize.Resize(uint(math.Floor(float64(rect.Dx())*ratio)),
+					uint(math.Floor(float64(rect.Dy())*ratio)),
+					tmpImage, resize.Lanczos3)
+				resizedBounds := resizedImage.Bounds()
+				// After first image, image may contains only difference
+				// bounds may not start from at (0,0)
+				if index >= 1 {
+					marginX := int(math.Floor(float64(rect.Min.X) * ratio))
+					marginY := int(math.Floor(float64(rect.Min.Y) * ratio))
+					resizedBounds = image.Rect(marginX, marginY, resizedBounds.Dx()+marginX,
+						resizedBounds.Dy()+marginY)
+				}
+				// Add colors from original gif image
+				var tmpPalette color.Palette
+				for x := 1; x <= rect.Dx(); x++ {
+					for y := 1; y <= rect.Dy(); y++ {
+						if !contains(tmpPalette, gifImage.Image[index].At(x, y)) {
+							tmpPalette = append(tmpPalette, gifImage.Image[index].At(x, y))
+						}
+					}
+				}
+				resizedPalette := image.NewPaletted(resizedBounds, tmpPalette)
+				draw.Draw(resizedPalette, resizedBounds, resizedImage, image.ZP, draw.Src)
+				gifImage.Image[index] = resizedPalette
+			}
+			// Set size to resized size
+			gifImage.Config.Width = int(math.Floor(width * ratio))
+			gifImage.Config.Height = int(math.Floor(height * ratio))
+			gif.EncodeAll(tmpFile, gifImage)
 		}
-		//		} else if ext == ".gif" {
-		//			for index, frame := range gifImage.Image {
-		//				rect := frame.Bounds()
-		//				tmpImage := frame.SubImage(rect)
-		//				resizedImage := resize.Resize(uint(math.Floor(width*ratio)), uint(math.Floor(height*ratio)),
-		//					tmpImage, resize.Lanczos3)
-		//				resizedBounds := resizedImage.Bounds()
-		//				resizedPalette := image.NewPaletted(resizedBounds, palette.Plan9)
-		//				draw.Draw(resizedPalette, resizedBounds, resizedImage, image.ZP, draw.Src)
-		//				gifImage.Image[index] = resizedPalette
-		//			}
-		//			gif.EncodeAll(tmpFile, gifImage)
 	}
 	return nil
+}
+
+// Check if color is already in the Palette
+func contains(colorPalette color.Palette, c color.Color) bool {
+	for _, tmpColor := range colorPalette {
+		if tmpColor == c {
+			return true
+		}
+	}
+	return false
 }
