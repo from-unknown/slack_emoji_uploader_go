@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"container/list"
-	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/headzoo/surf"
 	"github.com/nfnt/resize"
@@ -33,6 +32,8 @@ func main() {
 
 	const imageMax float64 = 128.0
 
+	const imageSizeMax int = 64
+
 	const loginFail string = "Sorry, you entered an incorrect email address or password."
 	const addSuccess string = "Your new emoji has been saved"
 	const postFix string = "_resized"
@@ -50,13 +51,24 @@ func main() {
 	}
 
 	emojiBase := filepath.Base(filePath)
-	fmt.Println(emojiBase)
+	emojiName := emojiBase[0 : len(emojiBase)-len(tmpExt)]
+	resizedFileName := emojiBase[0:len(emojiBase)-len(tmpExt)] + postFix + tmpExt
+
+	// Name check - only 0-9, a-z, -_ are allowed
+	match, err := regexp.MatchString("^[0-9a-z_-]+$", emojiName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !match {
+		log.Fatal("Custom emoji names can only contain lower case letters, numbers, dashes and underscores.")
+	}
+
 	err = resizeImage(filePath, imageMax)
 	if err != nil {
 		log.Fatal(err)
 	}
-	emojiName := emojiBase[0 : len(emojiBase)-len(tmpExt)]
-	resizedFileName := emojiBase[0:len(emojiBase)-len(tmpExt)] + postFix + tmpExt
+
+	// File size check
 
 	log.Println("Reading emoji_conf.txt...")
 	// Check ini file existance
@@ -143,7 +155,7 @@ func main() {
 	existList := list.New()
 	bow.Find("td.align_middle").Each(func(_ int, s *goquery.Selection) {
 		// emoji name are formatted :xxx: form, so use regexp to check
-		match, err := regexp.MatchString(":*:", s.Text())
+		match, err = regexp.MatchString(":*:", s.Text())
 		if err != nil {
 			log.Fatal("Error while checking web page.")
 		}
@@ -298,15 +310,6 @@ func resizeImage(filePath string, maxSize float64) error {
 				resizedImage := resize.Resize(uint(math.Floor(float64(rect.Dx())*ratio)),
 					uint(math.Floor(float64(rect.Dy())*ratio)),
 					tmpImage, resize.Lanczos3)
-				resizedBounds := resizedImage.Bounds()
-				// After first image, image may contains only difference
-				// bounds may not start from at (0,0)
-				if index >= 1 {
-					marginX := int(math.Floor(float64(rect.Min.X) * ratio))
-					marginY := int(math.Floor(float64(rect.Min.Y) * ratio))
-					resizedBounds = image.Rect(marginX, marginY, resizedBounds.Dx()+marginX,
-						resizedBounds.Dy()+marginY)
-				}
 				// Add colors from original gif image
 				var tmpPalette color.Palette
 				for x := 1; x <= rect.Dx(); x++ {
@@ -315,6 +318,16 @@ func resizeImage(filePath string, maxSize float64) error {
 							tmpPalette = append(tmpPalette, gifImage.Image[index].At(x, y))
 						}
 					}
+				}
+
+				// After first image, image may contains only difference
+				// bounds may not start from at (0,0)
+				resizedBounds := resizedImage.Bounds()
+				if index >= 1 {
+					marginX := int(math.Floor(float64(rect.Min.X) * ratio))
+					marginY := int(math.Floor(float64(rect.Min.Y) * ratio))
+					resizedBounds = image.Rect(marginX, marginY, resizedBounds.Dx()+marginX,
+						resizedBounds.Dy()+marginY)
 				}
 				resizedPalette := image.NewPaletted(resizedBounds, tmpPalette)
 				draw.Draw(resizedPalette, resizedBounds, resizedImage, image.ZP, draw.Src)
