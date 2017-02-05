@@ -44,35 +44,26 @@ func main() {
 	}
 	log.SetOutput(f)
 
-	filePath := os.Args[1]
-	tmpExt := strings.ToLower(filepath.Ext(filePath))
-	if tmpExt != ".jpg" && tmpExt != ".jpeg" && tmpExt != ".png" && tmpExt != ".gif" {
-		log.Fatal("Only jpeg or png or gif file are allowed.")
-	}
-
-	emojiBase := filepath.Base(filePath)
-	emojiName := emojiBase[0 : len(emojiBase)-len(tmpExt)]
-	resizedFileName := emojiBase[0:len(emojiBase)-len(tmpExt)] + postFix + tmpExt
-
-	// Name check - only 0-9, a-z, -_ are allowed
-	match, err := regexp.MatchString("^[0-9a-z_-]+$", emojiName)
+	log.Println("Reading default_emoji.txt...")
+	// Check default emoji file exists
+	file, err := os.Open("./default_emoji.txt")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Could not load default_emoji.txt file.")
 	}
-	if !match {
-		log.Fatal("Custom emoji names can only contain lower case letters, numbers, dashes and underscores.")
-	}
+	defer file.Close()
 
-	err = resizeImage(filePath, imageMax)
-	if err != nil {
-		log.Fatal(err)
+	// Read default emoji file
+	defaultEmojiList := list.New()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		tmp := scanner.Text()
+		tmp = strings.TrimSpace(tmp)
+		defaultEmojiList.PushBack(tmp)
 	}
-
-	// File size check
 
 	log.Println("Reading emoji_conf.txt...")
 	// Check ini file existance
-	file, err := os.Open("./emoji_conf.txt")
+	file, err = os.Open("./emoji_conf.txt")
 	if err != nil {
 		log.Fatal("Could not load emoji_conf.txt file.")
 	}
@@ -80,7 +71,7 @@ func main() {
 
 	// Read conf file
 	confList := list.New()
-	scanner := bufio.NewScanner(file)
+	scanner = bufio.NewScanner(file)
 	for scanner.Scan() {
 		tmp := scanner.Text()
 		tmp = strings.TrimSpace(tmp)
@@ -90,115 +81,132 @@ func main() {
 	}
 
 	// confList size must be greater than 4
-	if confList.Len() < 3 {
+	if confList.Len()%3 != 0 {
 		log.Fatal("Config file doesn't have enough settings.")
 	}
-	// Set conf data
-	slack_url = confList.Remove(confList.Front()).(string)
-	email = confList.Remove(confList.Front()).(string)
-	password = confList.Remove(confList.Front()).(string)
 
-	log.Println("Reading default_emoji.txt...")
-	// Check default emoji file exists
-	file, err = os.Open("./default_emoji.txt")
-	if err != nil {
-		log.Fatal("Could not load default_emoji.txt file.")
-	}
-	defer file.Close()
+	confLen := confList.Len() / 3
 
-	// Read default emoji file
-	defaultEmojiList := list.New()
-	scanner = bufio.NewScanner(file)
-	for scanner.Scan() {
-		tmp := scanner.Text()
-		tmp = strings.TrimSpace(tmp)
-		defaultEmojiList.PushBack(tmp)
-	}
+	for confCounter := 0; confCounter < confLen; confCounter++ {
+		// Set conf data
+		slack_url = confList.Remove(confList.Front()).(string)
+		email = confList.Remove(confList.Front()).(string)
+		password = confList.Remove(confList.Front()).(string)
 
-	log.Println("Opening slack team page...")
-	// Create a new browser and open Slack team
-	bow := surf.NewBrowser()
-	err = bow.Open(slack_url)
-	if err != nil {
-		log.Fatal("Could not access slack team.")
-	}
+		argsLen := len(os.Args)
+		for counter := 1; counter < argsLen; counter++ {
+			filePath := os.Args[counter]
+			tmpExt := strings.ToLower(filepath.Ext(filePath))
+			if tmpExt != ".jpg" && tmpExt != ".jpeg" && tmpExt != ".png" && tmpExt != ".gif" {
+				log.Fatal("Only jpeg or png or gif file are allowed.")
+			}
 
-	log.Println("Trying to sign in...")
-	// Log in to the site
-	fm, _ := bow.Form("form#signin_form")
-	if err != nil {
-		log.Fatal("Could not access signin form.")
-	}
+			emojiBase := filepath.Base(filePath)
+			emojiName := emojiBase[0 : len(emojiBase)-len(tmpExt)]
+			resizedFileName := emojiBase[0:len(emojiBase)-len(tmpExt)] + postFix + tmpExt
 
-	fm.Input("email", email)
-	fm.Input("password", password)
-	if fm.Submit() != nil {
-		log.Fatal("Could not sign in to slack team.")
-	}
+			// Name check - only 0-9, a-z, -_ are allowed
+			match, err := regexp.MatchString("^[0-9a-z_-]+$", emojiName)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if !match {
+				log.Fatal("Custom emoji names can only contain lower case letters, numbers, dashes and underscores.")
+			}
 
-	// Check login success or failed
-	bow.Find("p.alert_error").Each(func(_ int, s *goquery.Selection) {
-		tmpStr := strings.TrimSpace(s.Text())
-		if tmpStr == loginFail {
-			log.Fatal("Could not sign in to slack team.\nPlease check email and password.")
+			err = resizeImage(filePath, imageMax)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			// File size check
+
+			log.Println("Opening slack team page...")
+			// Create a new browser and open Slack team
+			bow := surf.NewBrowser()
+			err = bow.Open(slack_url)
+			if err != nil {
+				log.Fatal("Could not access slack team.")
+			}
+
+			log.Println("Trying to sign in...")
+			// Log in to the site
+			fm, _ := bow.Form("form#signin_form")
+			if err != nil {
+				log.Fatal("Could not access signin form.")
+			}
+
+			fm.Input("email", email)
+			fm.Input("password", password)
+			if fm.Submit() != nil {
+				log.Fatal("Could not sign in to slack team.")
+			}
+
+			// Check login success or failed
+			bow.Find("p.alert_error").Each(func(_ int, s *goquery.Selection) {
+				tmpStr := strings.TrimSpace(s.Text())
+				if tmpStr == loginFail {
+					log.Fatal("Could not sign in to slack team.\nPlease check email and password.")
+				}
+			})
+
+			log.Println("Accessing to customize page...")
+			// Open customize/emoji page
+			err = bow.Open(slack_url + "customize/emoji")
+			if err != nil {
+				log.Fatal("Could not access slack customize emoji page.")
+			}
+
+			// Find registered emoji from webpage
+			existList := list.New()
+			bow.Find("td.align_middle").Each(func(_ int, s *goquery.Selection) {
+				// emoji name are formatted :xxx: form, so use regexp to check
+				match, err = regexp.MatchString(":*:", s.Text())
+				if err != nil {
+					log.Fatal("Error while checking web page.")
+				}
+				if match {
+					tmpStr := strings.TrimSpace(s.Text())
+					tmpStr = tmpStr[1 : utf8.RuneCountInString(tmpStr)-1]
+					existList.PushBack(tmpStr)
+				}
+			})
+
+			if includeInList(defaultEmojiList, emojiName) ||
+				includeInList(existList, emojiName) {
+				log.Fatal("Emoji name " + emojiName + " already Exists.")
+			}
+
+			log.Println("Uploading emoji...")
+			// Upload emoji
+			fm, _ = bow.Form("form#addemoji")
+			if err != nil {
+				log.Println("Error while finding emoji form.")
+			}
+
+			fm.Input("name", emojiName)
+			read, err := ioutil.ReadFile(resizedFileName)
+			if err != nil {
+				log.Println("Error while opening emoji (" + emojiName + ") file.")
+			}
+			fm.File("img", resizedFileName, bytes.NewBuffer(read))
+			fm.Input("mode", "data")
+			if fm.Submit() != nil {
+				log.Println("Error while submitting emoji.")
+			}
+			bow.Find("p.alert_success").Each(func(_ int, s *goquery.Selection) {
+				tmpStr := strings.TrimSpace(s.Text())
+				if err != nil {
+					log.Fatal("Error while checking web page.")
+				}
+				if strings.Index(tmpStr, addSuccess) > -1 {
+					log.Println(emojiName + " successfully added.")
+				} else {
+					log.Println(emojiName + " could not added.")
+				}
+			})
 		}
-	})
-
-	log.Println("Accessing to customize page...")
-	// Open customize/emoji page
-	err = bow.Open(slack_url + "customize/emoji")
-	if err != nil {
-		log.Fatal("Could not access slack customize emoji page.")
 	}
-
-	// Find registered emoji from webpage
-	existList := list.New()
-	bow.Find("td.align_middle").Each(func(_ int, s *goquery.Selection) {
-		// emoji name are formatted :xxx: form, so use regexp to check
-		match, err = regexp.MatchString(":*:", s.Text())
-		if err != nil {
-			log.Fatal("Error while checking web page.")
-		}
-		if match {
-			tmpStr := strings.TrimSpace(s.Text())
-			tmpStr = tmpStr[1 : utf8.RuneCountInString(tmpStr)-1]
-			existList.PushBack(tmpStr)
-		}
-	})
-
-	if includeInList(defaultEmojiList, emojiName) ||
-		includeInList(existList, emojiName) {
-		log.Fatal("Emoji name " + emojiName + " already Exists.")
-	}
-
-	log.Println("Uploading emoji...")
-	// Upload emoji
-	fm, _ = bow.Form("form#addemoji")
-	if err != nil {
-		log.Println("Error while finding emoji form.")
-	}
-
-	fm.Input("name", emojiName)
-	read, err := ioutil.ReadFile(resizedFileName)
-	if err != nil {
-		log.Println("Error while opening emoji (" + emojiName + ") file.")
-	}
-	fm.File("img", resizedFileName, bytes.NewBuffer(read))
-	fm.Input("mode", "data")
-	if fm.Submit() != nil {
-		log.Println("Error while submitting emoji.")
-	}
-	bow.Find("p.alert_success").Each(func(_ int, s *goquery.Selection) {
-		tmpStr := strings.TrimSpace(s.Text())
-		if err != nil {
-			log.Fatal("Error while checking web page.")
-		}
-		if strings.Index(tmpStr, addSuccess) > -1 {
-			log.Println(emojiName + " successfully added.")
-		} else {
-			log.Println(emojiName + " could not added.")
-		}
-	})
 }
 
 // Check if target is in the list or not.
