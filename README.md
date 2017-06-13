@@ -12,7 +12,7 @@ Please download zip from [release page.](https://github.com/from-unknown/slack_e
 1. move all files to working folder
 1. write all information to config file
 1. rename picture file (uploaded emoji name will be a file name without extension.)
-1. drug and drop picture file (currently jpg or png) to  
+1. drug and drop picture file (currently jpg, png or gif) to  
    - For Mac:`upload.app`
    - For Windows:`upload.bat`  
 1. wait until emoji data are uploaded
