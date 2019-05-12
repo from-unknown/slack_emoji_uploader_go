@@ -13,17 +13,23 @@ import (
 
 func main() {
 	// Variables
-	var slackURL string
-	var email string
-	var password string
+	var slackToken string
 
 	emojiList := os.Args[1:]
 
-	log.Println("Reading emoji_conf.txt...")
-	// Check ini file existance
+	f, err := os.OpenFile("emoji.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	logger := log.New(f, "", log.LstdFlags)
+
+	logger.Println("Reading emoji_conf.txt...")
+	// Check ini file existence
 	file, err := os.Open("./emoji_conf.txt")
 	if err != nil {
-		log.Fatal("Could not load emoji_conf.txt file.")
+		logger.Fatal("Could not load emoji_conf.txt file.")
 	}
 	defer file.Close()
 
@@ -38,23 +44,40 @@ func main() {
 		}
 	}
 
-	// confList size must be multiple of 3
-	if confList.Len()%3 != 0 {
-		log.Fatal("Config file doesn't have enough settings.")
+	if confList.Len() < 2 {
+		logger.Println("please setup emoji_conf.txt file")
+		return
 	}
 
-	confLen := confList.Len() / 3
+	slackApiURL := confList.Remove(confList.Front()).(string)
 
+	defaultEmojiList, err := slackemojiupload.GetDefaultEmojiList()
+	if err != nil {
+		logger.Fatal(err)
+	}
 	var wg sync.WaitGroup
-	// slack team base loop
-	for confCounter := 0; confCounter < confLen; confCounter++ {
+	// slack token base loop
+	for confList.Len() > 0 {
+
 		// Set conf data
-		slackURL = confList.Remove(confList.Front()).(string)
-		email = confList.Remove(confList.Front()).(string)
-		password = confList.Remove(confList.Front()).(string)
+		slackToken = confList.Remove(confList.Front()).(string)
+		s, err := slackemojiupload.New(slackApiURL, slackToken, logger, slackemojiupload.LogLevelInfo)
+		if err != nil {
+			logger.Println(err)
+			continue
+		}
+
+		existEmojiList, err := s.GetExistEmojiList()
+		if err != nil {
+			logger.Println(err)
+			continue
+		}
+		existEmojiList.PushBackList(defaultEmojiList)
 
 		wg.Add(1)
-		go slackemojiupload.SlackEmojiUpload(&wg, slackURL, email, password, emojiList...)
+		s.SetEmojiList(existEmojiList)
+		logger.Println(slackToken[0:10] + "... start")
+		go s.SlackEmojiUpload(&wg, emojiList)
 	}
 	wg.Wait()
 }
